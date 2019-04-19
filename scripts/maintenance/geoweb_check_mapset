@@ -1,0 +1,128 @@
+#!/bin/bash
+
+#set -x
+
+# **** internal constants
+TMP_MAPFILE_LOG='/var/tmp/mapfile_dbg_'$$'.log'
+CHMS_MAIL_LOG_FROM='geoweb@gruppoiren.it'
+CHMS_MAIL_LOG_TO='marco.giraudi@gruppoiren.it'
+CHMS_MAIL_LOG_SUBJECT='Report controllo mapset'
+CHMS_MAIL_LOG_BODY='Segue il report di controllo mapset'
+
+# **** overridable constants
+[ -z "$GW_MAPFILES_DIR" ] && { GW_MAPFILES_DIR='/srv/geoweb/gisclient-3/map/'; }
+[ -z "$LOG_FILE" ] && { LOG_FILE='/var/tmp/geoweb_check_mapset_'$$'.log'; }
+
+function check_mapsets()
+{
+	[ -z "$1" ] && { echo $(date +"%F %X")" -  Nessun mapset specificato, controllo impossibile" >> $LOG_FILE 2>&1; return 1; }
+
+        echo $(date +"%F %X")" - Inizio controllo errori su mapset: $1" >> $LOG_FILE 2>&1
+
+	declare -i CHMS_RES=0
+        for mapfile in $1
+        do
+		[ "$mapfile" != "${mapfile#/}" ] && MAPFILE_PATH="${mapfile}.map" || MAPFILE_PATH="${GW_MAPFILES_DIR}${mapfile}.map"
+                echo $(date +"%F %X")" - Test del mapfile $MAPFILE_PATH" >> $LOG_FILE 2>&1
+                GW_EXTENT=$(cat "$MAPFILE_PATH" | grep EXTENT)
+                if [ -z "$GW_EXTENT" ]
+		then
+			echo $(date +"%F %X")" - Nome o percorso Mapfile non valido: $MAPFILE_PATH" >> $LOG_FILE 2>&1
+			CHMS_RES=$(($CHMS_RES+1))
+			continue
+		fi
+		declare -i MAPSET_RES=0
+                GW_EXTENT=$(echo ${GW_EXTENT#* })
+
+		if [ -z "$2" || "$2" -eq 0 ]
+		then
+			LAYER_LIST=$(echo $(cat $MAPFILE_PATH | grep -A 3 LAYER | grep -B 2 -e "TYPE (CHART\|CIRCLE\|LINE\|POINT\|POLYGON\|QUERY)" | grep GROUP  | grep -oe "[^\"]*" | grep -v GROUP | awk '!a[$0]++'))
+		else
+			LAYER_LIST=$(echo $(cat $MAPFILE_PATH | grep -A 3 LAYER | grep -B 1 -e "TYPE (CHART\|CIRCLE\|LINE\|POINT\|POLYGON\|QUERY)" | grep NAME | grep -oe "[^\"]*" | grep -v NAME))
+		fi
+		for ch_layer in $LAYER_LIST
+		do
+                	for i in $(seq 1 20)
+                	do
+                        	shp2img -m "$MAPFILE_PATH" -o /tmp/test.png -all_debug 5 -l "$ch_layer" -e $GW_EXTENT > "$TMP_MAPFILE_LOG" 2>&1
+                        	RES=$(cat "$TMP_MAPFILE_LOG" | grep -i error)
+                        	if [ -n "$RES" ]
+                        	then
+                                	echo $(date +"%F %X")" - Errore nel Mapfile $MAPFILE_PATH, layer $ch_layer, livello zoom $i" >> $LOG_FILE 2>&1
+                                	echo "Dettagli dell'errore:" >> $LOG_FILE 2>&1
+                                	echo "$RES" >> $LOG_FILE 2>&1
+                                	CHMS_RES=$(($CHMS_RES+1))
+					MAPSET_RES=$(($MAPSET_RES+1))
+					break
+                        	fi
+                        	XMIN=$(echo $GW_EXTENT | awk '{ print $1 }')
+                        	YMIN=$(echo $GW_EXTENT | awk '{ print $2 }')
+                        	XMAX=$(echo $GW_EXTENT | awk '{ print $3 }')
+                        	YMAX=$(echo $GW_EXTENT | awk '{ print $4 }')
+                        	XMIN=${XMIN%.*}
+                        	YMIN=${YMIN%.*}
+                        	XMAX=${XMAX%.*}
+                        	YMAX=${YMAX%.*}
+                        	XMIN_NEW=$((XMIN + (XMAX - XMIN)/4))
+                        	XMAX_NEW=$((XMAX - (XMAX - XMIN)/4))
+                        	YMIN_NEW=$((YMIN + (YMAX - YMIN)/4))
+                        	YMAX_NEW=$((YMAX - (YMAX - YMIN)/4))
+                        	GW_EXTENT="$XMIN_NEW $YMIN_NEW $XMAX_NEW $YMAX_NEW"
+			done
+                done
+		echo $(date +"%F %X")" - Test del mapfile $MAPFILE_PATH terminato, rilevati $MAPSET_RES errori" >> $LOG_FILE 2>&1
+        done
+	if [ $CHMS_RES -eq 0 ]
+      	then
+        	echo $(date +"%F %X")" - Test  mapfile $MAPFILE_PATH terminato con successo" >> $LOG_FILE 2>&1
+        else
+        	echo $(date +"%F %X")" - Test del mapfile $MAPFILE_PATH terminato con errori" >> $LOG_FILE 2>&1
+        fi
+		rm $TMP_MAPFILE_LOG
+        return $CHMS_RES
+}
+
+function send_report()
+{
+	REPORT_FILE="$1"
+	REPORT_STATUS="$2"
+	OUT_MAIL_LOG_SUBJECT=$CHMS_MAIL_LOG_SUBJECT
+
+	[ ! -f "$REPORT_FILE" ] && { return 3; }
+
+	# **** Send mail containing log
+	SENDMAIL=''
+	if which sendmail > /dev/null 2>&1
+	then
+        	SENDMAIL=$(which sendmail)
+	else
+        	echo $(date +"%F %X")" - Comando sendmail non trovato, impossibile spedire via mail il file di log" >> $LOG_FILE 2>&1
+        	return 1
+	fi
+
+	[ -z "$CHMS_MAIL_LOG_FROM" ] && return 2
+	[ -z "$CHMS_MAIL_LOG_TO" ] && return 2
+
+	if [ -n "$REPORT_STATUS" ]
+	then
+		if [ $REPORT_STATUS -eq 0 ]
+		then
+        		OUT_MAIL_LOG_SUBJECT=$OUT_MAIL_LOG_SUBJECT' - [OK]'
+		else
+        		OUT_MAIL_LOG_SUBJECT=$OUT_MAIL_LOG_SUBJECT' - [ERROR]'
+		fi
+	fi
+	(echo -e "From:$CHMS_MAIL_LOG_FROM\nSubject:$OUT_MAIL_LOG_SUBJECT\n\n$CHMS_MAIL_LOG_BODY\n"; cat $REPORT_FILE) | $SENDMAIL $CHMS_MAIL_LOG_TO
+}
+
+COMMAND=$0;
+if [ ${COMMAND##*/} == 'geoweb_check_mapset' ]
+then
+	[ -n "$3" ] && { CHMS_MAIL_LOG_TO="$3"; }
+	echo '' > $LOG_FILE
+	check_mapsets "$1" $2
+	CHECK_RES=$?
+	[ $CHECK_RES -ne 0 ] && { CHMS_MAIL_LOG_BODY="Numero errori riscontrati durante il controllo: $CHECK_RES\n\n$CHMS_MAIL_LOG_BODY"; }
+	send_report $LOG_FILE $CHECK_RES
+	rm $LOG_FILE
+fi
