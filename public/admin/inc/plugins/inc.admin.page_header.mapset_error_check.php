@@ -80,7 +80,6 @@
             }
 
             checkSingleLayers = $('input[name=check_object_type]:checked', '#frm_mapset_error_check').val();
-            alert(checkSingleLayers);
             mailAddress = $('#checkMapsetMail').val();
 
             var params = {
@@ -121,7 +120,7 @@
                         });
                         return;
                     }
-                    $('#error_dialog').html('<b style="color:black;">Il controllo per le mappe selezionate è stato avviato.<br>Al termine verrà inviato un messaggio di posta elettronica contenente il report errori.</b>');
+                    $('#error_dialog').html('<b style="color:black;">Il controllo per le mappe selezionate è stato avviato.<br>Al termine verrà inviato un messaggio di posta elettronica contenente il report errori.<br>E\' possibile chiudere questa finestra.</b>');
                     $('#error_dialog').dialog({
                         width: 600,
                         title: 'Esecuzione Controllo Mappe'
