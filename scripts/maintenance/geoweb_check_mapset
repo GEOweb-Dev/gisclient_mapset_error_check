@@ -24,7 +24,7 @@ function check_mapsets()
     do
 		[ "$mapfile" != "${mapfile#/}" ] && MAPFILE_PATH="${mapfile}.map" || MAPFILE_PATH="${GW_MAPFILES_DIR}${mapfile}.map"
 	    echo $(date +"%F %X")" - Test del mapfile $MAPFILE_PATH" >> $LOG_FILE 2>&1
-	    GW_EXTENT=$(cat "$MAPFILE_PATH" | grep EXTENT)
+	    GW_EXTENT_MAP=$(cat "$MAPFILE_PATH" | grep EXTENT)
 	    if [ -z "$GW_EXTENT" ]
 		then
 			echo $(date +"%F %X")" - Nome o percorso Mapfile non valido: $MAPFILE_PATH" >> $LOG_FILE 2>&1
@@ -32,9 +32,9 @@ function check_mapsets()
 			continue
 		fi
 		declare -i MAPSET_RES=0
-	    GW_EXTENT=$(echo ${GW_EXTENT#* })
+	    GW_EXTENT_MAP=$(echo ${GW_EXTENT_MAP#* })
 
-		if [ -z "$2" || "$2" -eq 0 ]
+		if [ -z "$2" ] || [ "$2" -eq 0 ]
 		then
 			LAYER_LIST=$(echo $(cat $MAPFILE_PATH | grep -A 3 LAYER | grep -B 2 -e "TYPE (CHART\|CIRCLE\|LINE\|POINT\|POLYGON\|QUERY)" | grep GROUP  | grep -oe "[^\"]*" | grep -v GROUP | awk '!a[$0]++'))
 		else
@@ -42,6 +42,7 @@ function check_mapsets()
 		fi
 		for ch_layer in $LAYER_LIST
 		do
+			GW_EXTENT=$GW_EXTENT_MAP
 	    	for i in $(seq 1 20)
 	    	do
 	    		shp2img -m "$MAPFILE_PATH" -o /tmp/test.png -all_debug 5 -l "$ch_layer" -e $GW_EXTENT > "$TMP_MAPFILE_LOG" 2>&1
