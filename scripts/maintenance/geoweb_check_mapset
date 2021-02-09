@@ -25,7 +25,7 @@ function check_mapsets()
 		[ "$mapfile" != "${mapfile#/}" ] && MAPFILE_PATH="${mapfile}.map" || MAPFILE_PATH="${GW_MAPFILES_DIR}${mapfile}.map"
 	    echo $(date +"%F %X")" - Test del mapfile $MAPFILE_PATH" >> $LOG_FILE 2>&1
 	    GW_EXTENT_MAP=$(cat "$MAPFILE_PATH" | grep EXTENT)
-	    if [ -z "$GW_EXTENT" ]
+	    if [ -z "$GW_EXTENT_MAP" ]
 		then
 			echo $(date +"%F %X")" - Nome o percorso Mapfile non valido: $MAPFILE_PATH" >> $LOG_FILE 2>&1
 			CHMS_RES=$(($CHMS_RES+1))
