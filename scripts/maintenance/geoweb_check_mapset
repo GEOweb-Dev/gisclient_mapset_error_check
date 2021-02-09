@@ -17,22 +17,22 @@ function check_mapsets()
 {
 	[ -z "$1" ] && { echo $(date +"%F %X")" -  Nessun mapset specificato, controllo impossibile" >> $LOG_FILE 2>&1; return 1; }
 
-        echo $(date +"%F %X")" - Inizio controllo errori su mapset: $1" >> $LOG_FILE 2>&1
+    echo $(date +"%F %X")" - Inizio controllo errori su mapset: $1" >> $LOG_FILE 2>&1
 
 	declare -i CHMS_RES=0
-        for mapfile in $1
-        do
+    for mapfile in $1
+    do
 		[ "$mapfile" != "${mapfile#/}" ] && MAPFILE_PATH="${mapfile}.map" || MAPFILE_PATH="${GW_MAPFILES_DIR}${mapfile}.map"
-                echo $(date +"%F %X")" - Test del mapfile $MAPFILE_PATH" >> $LOG_FILE 2>&1
-                GW_EXTENT=$(cat "$MAPFILE_PATH" | grep EXTENT)
-                if [ -z "$GW_EXTENT" ]
+	    echo $(date +"%F %X")" - Test del mapfile $MAPFILE_PATH" >> $LOG_FILE 2>&1
+	    GW_EXTENT=$(cat "$MAPFILE_PATH" | grep EXTENT)
+	    if [ -z "$GW_EXTENT" ]
 		then
 			echo $(date +"%F %X")" - Nome o percorso Mapfile non valido: $MAPFILE_PATH" >> $LOG_FILE 2>&1
 			CHMS_RES=$(($CHMS_RES+1))
 			continue
 		fi
 		declare -i MAPSET_RES=0
-                GW_EXTENT=$(echo ${GW_EXTENT#* })
+	    GW_EXTENT=$(echo ${GW_EXTENT#* })
 
 		if [ -z "$2" || "$2" -eq 0 ]
 		then
@@ -42,44 +42,59 @@ function check_mapsets()
 		fi
 		for ch_layer in $LAYER_LIST
 		do
-                	for i in $(seq 1 20)
-                	do
-                        	shp2img -m "$MAPFILE_PATH" -o /tmp/test.png -all_debug 5 -l "$ch_layer" -e $GW_EXTENT > "$TMP_MAPFILE_LOG" 2>&1
-                        	RES=$(cat "$TMP_MAPFILE_LOG" | grep -i error)
-                        	if [ -n "$RES" ]
-                        	then
-                                	echo $(date +"%F %X")" - Errore nel Mapfile $MAPFILE_PATH, layer $ch_layer, livello zoom $i" >> $LOG_FILE 2>&1
-                                	echo "Dettagli dell'errore:" >> $LOG_FILE 2>&1
-                                	echo "$RES" >> $LOG_FILE 2>&1
-                                	CHMS_RES=$(($CHMS_RES+1))
+	    	for i in $(seq 1 20)
+	    	do
+	    		shp2img -m "$MAPFILE_PATH" -o /tmp/test.png -all_debug 5 -l "$ch_layer" -e $GW_EXTENT > "$TMP_MAPFILE_LOG" 2>&1
+	        	RES=$(cat "$TMP_MAPFILE_LOG" | grep -i error)
+	        	if [ -n "$RES" ]
+	        	then
+	            	echo $(date +"%F %X")" - Errore nel Mapfile $MAPFILE_PATH, layer $ch_layer, livello zoom $i" >> $LOG_FILE 2>&1
+	            	echo "Dettagli dell'errore:" >> $LOG_FILE 2>&1
+	            	echo "$RES" >> $LOG_FILE 2>&1
+	            	CHMS_RES=$(($CHMS_RES+1))
 					MAPSET_RES=$(($MAPSET_RES+1))
 					break
-                        	fi
-                        	XMIN=$(echo $GW_EXTENT | awk '{ print $1 }')
-                        	YMIN=$(echo $GW_EXTENT | awk '{ print $2 }')
-                        	XMAX=$(echo $GW_EXTENT | awk '{ print $3 }')
-                        	YMAX=$(echo $GW_EXTENT | awk '{ print $4 }')
-                        	XMIN=${XMIN%.*}
-                        	YMIN=${YMIN%.*}
-                        	XMAX=${XMAX%.*}
-                        	YMAX=${YMAX%.*}
-                        	XMIN_NEW=$((XMIN + (XMAX - XMIN)/4))
-                        	XMAX_NEW=$((XMAX - (XMAX - XMIN)/4))
-                        	YMIN_NEW=$((YMIN + (YMAX - YMIN)/4))
-                        	YMAX_NEW=$((YMAX - (YMAX - YMIN)/4))
-                        	GW_EXTENT="$XMIN_NEW $YMIN_NEW $XMAX_NEW $YMAX_NEW"
+	        	fi
+	        	XMIN=$(echo $GW_EXTENT | awk '{ print $1 }')
+	        	YMIN=$(echo $GW_EXTENT | awk '{ print $2 }')
+	        	XMAX=$(echo $GW_EXTENT | awk '{ print $3 }')
+	        	YMAX=$(echo $GW_EXTENT | awk '{ print $4 }')
+	        	XMIN=${XMIN%.*}
+	        	YMIN=${YMIN%.*}
+	        	XMAX=${XMAX%.*}
+	        	YMAX=${YMAX%.*}
+	        	XMIN_NEW=$((XMIN + (XMAX - XMIN)/4))
+	        	XMAX_NEW=$((XMAX - (XMAX - XMIN)/4))
+	        	YMIN_NEW=$((YMIN + (YMAX - YMIN)/4))
+	        	YMAX_NEW=$((YMAX - (YMAX - YMIN)/4))
+	        	GW_EXTENT="$XMIN_NEW $YMIN_NEW $XMAX_NEW $YMAX_NEW"
 			done
-                done
+			XMIN_NEW=$((XMIN + (XMAX - XMIN)/2))
+	        XMAX_NEW=$((XMIN_NEW + 1))
+	        YMIN_NEW=$((YMIN + (YMAX - YMIN)/2))
+	        YMAX_NEW=$((YMIN_NEW + 1))
+	        GW_EXTENT="$XMIN_NEW $YMIN_NEW $XMAX_NEW $YMAX_NEW"
+			shp2img -m "$MAPFILE_PATH" -o /tmp/test.png -all_debug 5 -l "$ch_layer" -e $GW_EXTENT > "$TMP_MAPFILE_LOG" 2>&1
+			RES=$(cat "$TMP_MAPFILE_LOG" | grep -i error)
+			if [ -n "$RES" ]
+			then
+				echo $(date +"%F %X")" - Errore nel Mapfile $MAPFILE_PATH, layer $ch_layer, livello zoom minimo" >> $LOG_FILE 2>&1
+				echo "Dettagli dell'errore:" >> $LOG_FILE 2>&1
+				echo "$RES" >> $LOG_FILE 2>&1
+				CHMS_RES=$(($CHMS_RES+1))
+				MAPSET_RES=$(($MAPSET_RES+1))
+			fi
+	    done
 		echo $(date +"%F %X")" - Test del mapfile $MAPFILE_PATH terminato, rilevati $MAPSET_RES errori" >> $LOG_FILE 2>&1
-        done
+    done
 	if [ $CHMS_RES -eq 0 ]
       	then
         	echo $(date +"%F %X")" - Test  mapfile $MAPFILE_PATH terminato con successo" >> $LOG_FILE 2>&1
         else
         	echo $(date +"%F %X")" - Test del mapfile $MAPFILE_PATH terminato con errori" >> $LOG_FILE 2>&1
-        fi
-		rm $TMP_MAPFILE_LOG
-        return $CHMS_RES
+    fi
+	rm $TMP_MAPFILE_LOG
+    return $CHMS_RES
 }
 
 function send_report()
